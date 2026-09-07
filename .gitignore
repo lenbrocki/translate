@@ -1,0 +1,14 @@
+.DS_Store
+
+# Local secrets — the app deliberately never reads this, but keep it out anyway.
+.env
+
+# Swift build products
+native/.build/
+native/dist/
+
+# Release artefacts and signing material
+*.dmg
+*.zip
+*.p12
+cert.p12

@@ -1,0 +1,145 @@
+name: Release
+
+# Build, sign (Developer ID), notarize, and publish a .dmg whenever a version tag is pushed.
+# Example:  git tag v1.0.0 && git push origin v1.0.0
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: write # needed to create the GitHub Release
+
+defaults:
+  run:
+    working-directory: native
+
+jobs:
+  release:
+    runs-on: macos-15
+    steps:
+      - uses: actions/checkout@v5
+
+      # Pin the toolchain so the released .dmg is built the same way as a local
+      # build. If the runner doesn't have this version, the step errors and
+      # lists what it does have — bump the runner image or the version here.
+      - name: Select Xcode (match local toolchain)
+        uses: maxim-lobanov/setup-xcode@v1
+        with:
+          xcode-version: "26.2"
+
+      - name: Verify toolchain
+        run: |
+          set -euo pipefail
+          swift --version
+          SWIFT_VER="$(swift -version 2>&1 | sed -nE 's/.*Apple Swift version ([0-9]+\.[0-9]+).*/\1/p' | head -1)"
+          echo "Detected Swift $SWIFT_VER"
+          MIN="6.0"   # Package.swift declares swift-tools-version 6.0
+          if [ "$(printf '%s\n%s\n' "$MIN" "$SWIFT_VER" | sort -V | head -1)" != "$MIN" ]; then
+            echo "::error::Swift $SWIFT_VER is older than $MIN. Aborting."
+            exit 1
+          fi
+
+      - name: Import Developer ID signing certificate
+        env:
+          MACOS_CERTIFICATE: ${{ secrets.MACOS_CERTIFICATE }}
+          MACOS_CERTIFICATE_PWD: ${{ secrets.MACOS_CERTIFICATE_PWD }}
+          KEYCHAIN_PASSWORD: ${{ secrets.KEYCHAIN_PASSWORD }}
+        run: |
+          set -euo pipefail
+          echo "$MACOS_CERTIFICATE" | base64 --decode > cert.p12
+          security create-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security set-keychain-settings -lut 21600 build.keychain
+          security unlock-keychain -p "$KEYCHAIN_PASSWORD" build.keychain
+          security import cert.p12 -k build.keychain -P "$MACOS_CERTIFICATE_PWD" -T /usr/bin/codesign
+          security list-keychains -d user -s build.keychain $(security list-keychains -d user | tr -d '"')
+          security set-key-partition-list -S apple-tool:,apple:,codesign: -s -k "$KEYCHAIN_PASSWORD" build.keychain
+          rm cert.p12
+
+      # build.sh is the same script used locally; the identity and version are
+      # all that differ. It stops at the .app so notarization can happen before
+      # the disk image is assembled around it.
+      - name: Build & sign the app (universal, hardened runtime)
+        run: |
+          set -euo pipefail
+          IDENTITY="$(security find-identity -v -p codesigning build.keychain \
+            | awk '/Developer ID Application/ {print $2; exit}')"
+          if [ -z "$IDENTITY" ]; then
+            echo "::error::No Developer ID Application identity in the build keychain."
+            security find-identity -v -p codesigning build.keychain
+            exit 1
+          fi
+          VERSION="${GITHUB_REF_NAME#v}" CODESIGN_IDENTITY="$IDENTITY" ./build.sh --app-only
+
+      - name: Notarize the app
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+          APP="dist/Translate.app"
+          ditto -c -k --keepParent "$APP" Translate.zip
+
+          # Submit and capture the submission id (don't rely on --wait's exit code,
+          # which is 0 even when the result is "Invalid").
+          SUBMIT_JSON="$(xcrun notarytool submit Translate.zip \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" \
+            --wait --output-format json)"
+          echo "$SUBMIT_JSON"
+          SUBMISSION_ID="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
+          STATUS="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["status"])')"
+
+          # Always print the detailed notary log so rejections are diagnosable.
+          echo "--- notarization log ($SUBMISSION_ID) ---"
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" || true
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::Notarization failed with status: $STATUS"
+            exit 1
+          fi
+
+          xcrun stapler staple "$APP"
+
+      - name: Build the DMG around the stapled app
+        run: ./build.sh --dmg-only
+
+      - name: Notarize the DMG
+        env:
+          APPLE_ID: ${{ secrets.APPLE_ID }}
+          TEAM_ID: ${{ secrets.APPLE_TEAM_ID }}
+          APPLE_APP_PASSWORD: ${{ secrets.APPLE_APP_PASSWORD }}
+        run: |
+          set -euo pipefail
+
+          # The app inside is already notarized+stapled, so this submission is quick.
+          # Notarizing+stapling the .dmg itself lets the download pass Gatekeeper directly.
+          SUBMIT_JSON="$(xcrun notarytool submit dist/Translate.dmg \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" \
+            --wait --output-format json)"
+          echo "$SUBMIT_JSON"
+          SUBMISSION_ID="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
+          STATUS="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["status"])')"
+
+          echo "--- notarization log ($SUBMISSION_ID) ---"
+          xcrun notarytool log "$SUBMISSION_ID" \
+            --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" || true
+
+          if [ "$STATUS" != "Accepted" ]; then
+            echo "::error::DMG notarization failed with status: $STATUS"
+            exit 1
+          fi
+
+          xcrun stapler staple dist/Translate.dmg
+          spctl --assess --type open --context context:primary-signature -vv dist/Translate.dmg
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          gh release create "$GITHUB_REF_NAME" dist/Translate.dmg \
+            --title "$GITHUB_REF_NAME" \
+            --generate-notes

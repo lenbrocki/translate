@@ -19,6 +19,7 @@ final class AppCore {
     private init() {}
 
     func start() {
+        watchWindows()
         do {
             try registerShortcut(Preferences.shared.shortcut)
         } catch {
@@ -82,11 +83,56 @@ final class AppCore {
     }
 
     func showMainWindow() {
-        NSApp.activate(ignoringOtherApps: true)
-        if let window = NSApp.windows.first(where: { !($0 is NSPanel) && $0.title == "Translate" }) {
-            window.makeKeyAndOrderFront(nil)
-        } else {
-            openMainWindow?()
+        // The Dock icon comes back first. An accessory app cannot take focus
+        // the way a regular one does, so activating before the switch leaves
+        // the window sitting behind whatever the user was looking at.
+        NSApp.setActivationPolicy(.regular)
+
+        // A turn later: AppKit is still installing the menu bar and the Dock
+        // tile, and activation asked for during that lands unreliably.
+        DispatchQueue.main.async {
+            NSApp.activate(ignoringOtherApps: true)
+            if let window = NSApp.windows.first(where: { !($0 is NSPanel) && $0.title == "Translate" }) {
+                window.makeKeyAndOrderFront(nil)
+            } else {
+                self.openMainWindow?()
+            }
         }
+    }
+
+    // MARK: - Dock icon
+
+    /// The Dock icon follows the windows: present while one is open, gone once
+    /// the last one closes. The app itself keeps running either way — in
+    /// `.accessory` the menu-bar item stays, the global shortcut stays
+    /// registered, and the overlay still appears over other apps.
+    private func watchWindows() {
+        // Close and key cover the ordinary cases. Occlusion catches a window
+        // that appears without taking focus — Settings, opened from the menu
+        // bar while the app has no Dock icon to activate through.
+        let names: [Notification.Name] = [
+            NSWindow.willCloseNotification,
+            NSWindow.didBecomeKeyNotification,
+            NSWindow.didChangeOcclusionStateNotification,
+        ]
+        for name in names {
+            NotificationCenter.default.addObserver(
+                forName: name, object: nil, queue: .main
+            ) { [weak self] _ in
+                // `willClose` arrives while the window is still listed and
+                // still visible, so let the close finish before counting.
+                DispatchQueue.main.async { self?.syncActivationPolicy() }
+            }
+        }
+    }
+
+    /// Counts only windows that can become main. The overlay is an `NSPanel`
+    /// and the menu-bar extra carries a status window of its own; neither is a
+    /// window the user has open, and neither should hold the Dock icon.
+    private func syncActivationPolicy() {
+        let wanted: NSApplication.ActivationPolicy =
+            NSApp.windows.contains { $0.isVisible && $0.canBecomeMain } ? .regular : .accessory
+        guard NSApp.activationPolicy() != wanted else { return }
+        NSApp.setActivationPolicy(wanted)
     }
 }

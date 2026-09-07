@@ -51,8 +51,9 @@ the whole app is a 2 MB universal binary.
   same four Quality levels, so switching provider changes who translates and
   nothing else about what was asked for. Each keeps its own key, so switching
   back and forth costs nothing.
-- **Menu-bar resident** — closing the main window leaves the shortcut working;
-  quit from the menu-bar menu.
+- **Menu-bar resident** — closing the main window drops the Dock icon and
+  leaves the app running in the menu bar, shortcut and all; opening a window
+  again brings the icon back. Quit from the menu-bar menu.
 
 ## Installing
 

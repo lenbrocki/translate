@@ -10,6 +10,27 @@ full-screen one.
 Written in Swift and SwiftUI against AppKit. No web view, no bundled runtime:
 the whole app is a 2 MB universal binary.
 
+## Register and gender, not just language
+
+![The main window, translating into formal Polish with the speaker set to female and the addressee to male](assets/main-window.png)
+
+English hands the model nothing to go on, so the app asks. **Formal** picks
+*Pan/Pani* over *ty*; **Speaker: Female** gets *Byłam gotowa* and *żebym mogła*
+rather than *Byłem gotowy*; **Addressee: Male** gets *czy mógłby Pan* rather than
+*czy mogłaby Pani*. Each control is live only for target languages that mark
+that distinction, and the whole gender row folds away — the dot on the button
+says when a choice is still in force.
+
+## Translate in whatever app you're already in
+
+![The floating card translating a German letter over a TextEdit window](assets/overlay.png)
+
+Select text anywhere, press <kbd>⌘⇧T</kbd>, and the translation appears in a
+card next to the pointer. The card is a non-activating panel that joins every
+Space, so the app underneath keeps focus and a full-screen app stays
+full-screen. <kbd>⎋</kbd> dismisses it, <kbd>⌘C</kbd> copies; clicking the
+target language re-translates the same captured text.
+
 ## What it does
 
 - **Main window** — paste text, pick languages, get a streamed translation. The

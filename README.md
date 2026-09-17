@@ -1,226 +1,133 @@
 # Translate
 
-A native macOS app that translates text with **Claude Sonnet 5** or **GPT-5.6
-Luna**, plus a configurable global shortcut that translates the current
-selection into a floating card — without leaving the app you're in, even a
-full-screen one.
+A macOS app that translates text with **Claude Sonnet 5** or **GPT-5.6 Luna** —
+in its own window, or right inside whatever app you're using, with a keyboard
+shortcut that shows the translation in a floating card next to your pointer.
 
 ![app icon](assets/icon.png)
-
-Written in Swift and SwiftUI against AppKit. No web view, no bundled runtime:
-the whole app is a 2 MB universal binary.
 
 ## Register and gender, not just language
 
 ![The main window, translating into formal Polish with the speaker set to female and the addressee to male](assets/main-window.png)
 
-English hands the model nothing to go on, so the app asks. **Formal** picks
-*Pan/Pani* over *ty*; **Speaker: Female** gets *Byłam gotowa* and *żebym mogła*
-rather than *Byłem gotowy*; **Addressee: Male** gets *czy mógłby Pan* rather than
-*czy mogłaby Pani*. Each control is live only for target languages that mark
-that distinction, and the whole gender row folds away — the dot on the button
-says when a choice is still in force.
+English often leaves out things other languages have to say. The app lets you
+fill them in. **Formal** picks *Pan/Pani* over *ty*. **Speaker: Female** gets
+*Byłam gotowa* and *żebym mogła* rather than *Byłem gotowy*. **Addressee: Male**
+gets *czy mógłby Pan* rather than *czy mogłaby Pani*. Each control only works
+for target languages that make that distinction. The gender row stays folded
+away until you need it, and a dot on the **Gender** button tells you when a
+choice is active.
 
 ## Translate in whatever app you're already in
 
 ![The floating card translating a German letter over a TextEdit window](assets/overlay.png)
 
 Select text anywhere, press <kbd>⌘⇧T</kbd>, and the translation appears in a
-card next to the pointer. The card is a non-activating panel that joins every
-Space, so the app underneath keeps focus and a full-screen app stays
-full-screen. <kbd>⎋</kbd> dismisses it, <kbd>⌘C</kbd> copies, and
-<kbd>⌘↩</kbd> pastes the translation over the selection it came from; **Open in
-App** carries the text and its translation into the main window; clicking the
-target language re-translates the same captured text.
+card next to the pointer. The app you're in keeps focus, and a full-screen app
+stays full-screen. From the card you can copy the translation, paste it over
+the text you selected, or open it in the main window to keep working on it.
 
-## What it does
+## Getting started
 
-- **Main window** — paste text, pick languages, get a streamed translation. The
-  window has no title bar of its own: the language controls sit in that row, and
-  both texts share one recessed well below them.
-  ⌘↩ translates, ⌘. stops. The language pickers are searchable: click one and
-  type any part of the English name, the endonym, or the code (`pt-` narrows to
-  the two Portuguese variants, `简` finds Simplified Chinese).
-- **Auto-detect** — the source language defaults to *Detect language*; once
-  the translation comes back, the source picker names the language it found,
-  and swapping uses it as the new target.
-- **Formal / informal register** — the choice is enforced in the prompt with
-  language-specific guidance, so Polish gets *Pan/Pani* vs *ty*, German *Sie* vs
-  *du*, Japanese です/ます vs plain forms, and so on. The control is only live for
-  target languages that actually mark the distinction; English, Hebrew, Arabic,
-  and the mainland Scandinavian languages pin it to *Auto*.
-- **Speaker and addressee gender** — two *Auto / Male / Female* controls behind
-  a **Gender** button in the control bar, folded away by default because most
-  translations need neither. Many languages inflect for the gender of the person
-  being addressed *and* for the gender of whoever is speaking, and English gives
-  the model nothing to go on: Polish *czy mógłby Pan* vs *czy mogłaby Pani* for
-  the addressee, *zrobiłem* vs *zrobiłam* for the speaker, Russian and Czech past
-  tenses, Hebrew and Arabic first- and second-person verbs, Romance and Greek
-  adjectives, ครับ vs ค่ะ in Thai. Each control is gated on its own question —
-  21 of the 38 languages mark the addressee, 22 the speaker (Thai marks who is
-  speaking but not who is spoken to) — and pins to *Auto* where the language
-  does not mark it. On *Auto* the model takes the gender from the text where the
-  text makes it clear, and otherwise picks phrasing that avoids the marking
-  rather than writing *gotowy/gotowa*. A dot on the collapsed button shows when
-  either choice is in force, so a setting made once is never invisible.
-- **Global shortcut** (default <kbd>⌘⇧T</kbd>) — copies the selection out of
-  whatever app is frontmost, translates it, and shows the result in a floating
-  card next to the pointer. The card is a non-activating `NSPanel` that joins
-  every Space, so triggering it from a full-screen app does not switch you out
-  of it. ⎋ dismisses it, ⌘C copies the translation, and ⌘↩ (or the replace
-  button) pastes it over the original selection — surrounding whitespace kept,
-  clipboard restored afterwards. Its header reads
-  `source → target`; clicking the target opens the same searchable list and
-  re-translates the captured text into whatever you pick.
-- **Two providers** — Claude Sonnet 5 (adaptive thinking) or GPT-5.6 Luna,
-  chosen in Settings › General. Both get byte-identical instructions and the
-  same four Quality levels, so switching provider changes who translates and
-  nothing else about what was asked for. Each keeps its own key, so switching
-  back and forth costs nothing.
-- **Menu-bar resident** — closing the main window drops the Dock icon and
-  leaves the app running in the menu bar, shortcut and all; opening a window
-  again brings the icon back. Quit from the menu-bar menu.
+1. **Install.** Download `Translate.dmg` from the
+   [latest release](https://github.com/lenbrocki/translate/releases/latest),
+   open it, and drag **Translate** to your Applications folder. Requires macOS
+   14 or newer, on Apple silicon or Intel.
+2. **Add an API key.** Open **Settings › API Keys** (<kbd>⌘,</kbd>, or
+   *Settings…* in the menu-bar menu). Paste your key under the provider it
+   belongs to and click **Save**. You need a key for at least one of them:
+   - Anthropic (Claude) — create one at
+     [console.anthropic.com](https://console.anthropic.com/settings/keys)
+   - OpenAI — create one at
+     [platform.openai.com](https://platform.openai.com/api-keys)
 
-## Installing
+   You can add both and switch between them in **Settings › General**. Each
+   provider keeps its own key, so switching doesn't lose anything.
+3. **Allow Accessibility** (only needed for the shortcut). Go to
+   **Settings › Shortcut** and click **Grant…**, or turn on Translate under
+   *System Settings › Privacy & Security › Accessibility*. macOS requires this
+   before an app can read text you've selected in other apps.
 
-Download `Translate.dmg` from the
-[latest release](https://github.com/lenbrocki/translate/releases/latest), open
-it, and drag the app to Applications. Releases are signed with a Developer ID
-certificate and notarized by Apple, so they open without any right-click
-warning dance.
+### About your API key
 
-## Requirements
+Your key is stored in your macOS **login keychain**, not in a file, and
+requests go straight from your Mac to Anthropic or OpenAI. The app reads keys
+only from the keychain. It ignores any `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
+set in your shell. To remove a key, use **Remove saved key** in
+**Settings › API Keys**. Translations are billed to your own account with that
+provider.
 
-- macOS 14 or newer (Apple silicon or Intel)
-- An API key for whichever provider you translate with — Anthropic, OpenAI, or both
-- **Accessibility permission**, for the shortcut only. macOS gives no way to
-  read another app's selection directly, so the app synthesises a ⌘C, reads the
-  pasteboard, and puts the previous contents back — the same approach DeepL
-  uses. Grant it under *System Settings › Privacy & Security › Accessibility*;
-  Settings › Shortcut has a button that opens the prompt.
+## Using the main window
 
-  One consequence worth knowing: restoring the clipboard restores the **plain
-  text** that was on it. If you had an image or rich text copied when you fired
-  the shortcut, that flavour is lost.
+- **Type or paste** on the left. A paste translates right away. Typing
+  translates once you pause for a moment, or press <kbd>⌘↩</kbd>.
+  <kbd>⌘.</kbd> stops a translation in progress.
+- **Pick languages** from the two pickers at the top. They're searchable: click
+  one and type part of the English name, the language's own name, or its code.
+  For example, `pt-` shows both Portuguese variants and `简` finds Simplified
+  Chinese.
+- **Detect language** is the default source. Once a translation comes back,
+  the picker shows which language was detected. The ⇆ button swaps the source
+  and target and translates the result back.
+- **Register** (*Auto / Informal / Formal*) sets how formally to address the
+  reader: *Sie* or *du* in German, *vous* or *tu* in French, polite or plain
+  forms in Japanese. It's greyed out for languages without that distinction,
+  like English.
+- **Gender** opens two more controls:
+  - **Speaker** — the gender of the "I" in the text. It changes Polish
+    *zrobiłem/zrobiłam*, Spanish *listo/lista*, and Hebrew and Arabic verb
+    forms.
+  - **Addressee** — the gender of the person you're writing to, as in Polish
+    *Pan/Pani*.
 
-## Setting the API key
+  On *Auto*, the translation uses whatever the text makes clear and otherwise
+  picks wording that avoids guessing. Changing register or gender translates
+  the text again straight away.
+- **Copy** puts the translation on the clipboard. When the text came from the
+  card via **Open in App**, you also get **Replace in *app***, which pastes
+  the translation back over your original selection.
 
-Paste it into **Settings › API Keys**, under the provider it belongs to. It goes into your login **keychain**
-(service `com.lennartbrocki.translate`), not a file on disk, and that is the
-only place the app reads them from — one item per provider, so switching costs
-nothing. There is deliberately no `ANTHROPIC_API_KEY` or `OPENAI_API_KEY`
-fallback: whether an inherited environment variable applied would depend on how
-the app happened to be launched, which you cannot see from inside it.
-Everything else is in `UserDefaults`.
+## Using the shortcut
 
-## Building
+1. Select text in any app — a browser, Mail, a PDF, a chat window.
+2. Press <kbd>⌘⇧T</kbd>. You can change the shortcut in **Settings › Shortcut**.
+3. The translation appears in a card next to the pointer.
 
-```bash
-cd native && ./build.sh
-```
+In the card:
 
-That compiles a universal (arm64 + x86_64) release binary, assembles
-`Translate.app`, signs it, and writes `native/dist/Translate.dmg`.
-`./build.sh --native` skips the second architecture and is roughly twice as
-fast.
-
-For a quick edit-run loop, `swift build && .build/debug/Translate` works, but
-the menu-bar item and window activation only behave correctly from inside the
-app bundle — so prefer `./build.sh --native && open dist/Translate.app`.
-
-### A note on signing
-
-A local `./build.sh` signs with the first *Apple Development* certificate in
-your keychain, which Xcode creates for any Apple ID. That signature stays the
-same from one build to the next, so the Accessibility grant and keychain access
-survive rebuilds.
-
-Without such a certificate (or with `CODESIGN_IDENTITY=-`) it signs ad hoc, and
-macOS quarantines the app on first launch: right-click it in `/Applications`
-and choose *Open*, or run
-`xattr -dr com.apple.quarantine "/Applications/Translate.app"`. Downloads from
-the Releases page are signed and notarized properly and need none of that.
-
-An ad-hoc signature also changes on every rebuild, which means macOS treats
-each build as a new app: the Accessibility grant has to be re-approved after
-you replace the app, and the keychain will ask once for permission to read a
-key a previous build saved. Saving the key again in Settings clears that for
-good, because writing deletes and re-adds the item, leaving the running build
-as its owner. A real Developer ID signature avoids both, and is what the
-release workflow uses:
-
-```bash
-cd native
-VERSION=1.0.0 CODESIGN_IDENTITY="Developer ID Application: …" ./build.sh
-```
-
-## Releasing
-
-Push a tag and [`.github/workflows/release.yml`](.github/workflows/release.yml)
-does the rest — Developer ID signing with the hardened runtime, notarization
-and stapling of both the app and the disk image, then a GitHub Release with the
-`.dmg` attached:
-
-```bash
-git tag v1.0.0 && git push origin v1.0.0
-```
-
-The workflow calls the same `native/build.sh` you run locally, passing
-`CODESIGN_IDENTITY` and `VERSION`; the only reason it invokes it twice
-(`--app-only`, then `--dmg-only`) is that notarization has to happen between
-the two halves, so the disk image is built around an already-stapled app.
-
-It needs six repository secrets:
-
-| Secret | What it is |
+| Action | How |
 | --- | --- |
-| `MACOS_CERTIFICATE` | Developer ID Application certificate + private key, exported as `.p12` and base64-encoded |
-| `MACOS_CERTIFICATE_PWD` | The password set when exporting that `.p12` |
-| `KEYCHAIN_PASSWORD` | Any string; the throwaway keychain the runner creates uses it |
-| `APPLE_ID` | The Apple ID the certificate belongs to |
-| `APPLE_TEAM_ID` | Your 10-character team identifier |
-| `APPLE_APP_PASSWORD` | An app-specific password from appleid.apple.com, for `notarytool` |
+| Copy the translation | <kbd>⌘C</kbd> or **Copy** |
+| Replace the selected text with the translation | <kbd>⌘↩</kbd> or **Replace** |
+| Translate into a different language | Click the target language in the card's header |
+| Continue in the main window | **Open in App** |
+| Close the card | <kbd>⎋</kbd>, the ✕ button, or click anywhere else |
 
-## How it's put together
+The shortcut copies your selection to read it, then puts back what was on your
+clipboard before. Only plain text is restored, so an image or formatted text
+you had copied will be lost.
 
-| Path | What lives there |
-|---|---|
-| `native/Sources/Translate/Service/Translation.swift` | The request, the shared prompt, SSE and header parsing, provider dispatch |
-| `native/Sources/Translate/Service/AnthropicClient.swift` | Streaming Messages API client |
-| `native/Sources/Translate/Service/OpenAIClient.swift` | Streaming Responses API client |
-| `native/Sources/Translate/Service/SelectionCapture.swift` | Reading the frontmost app's selection, pasteboard save/restore |
-| `native/Sources/Translate/Service/GlobalHotKey.swift` | The system-wide shortcut, via Carbon's `RegisterEventHotKey` |
-| `native/Sources/Translate/UI/OverlayController.swift` | The non-activating `NSPanel`, its placement and dismissal |
-| `native/Sources/Translate/UI/MainView.swift` | Main window |
-| `native/Sources/Translate/UI/LanguageField.swift` | The searchable language pop-up |
-| `native/Sources/Translate/UI/PlainTextEditor.swift` | The text view, with insets and placeholder we control exactly |
-| `native/Sources/Translate/UI/SettingsView.swift` | Settings (⌘,) |
-| `native/Sources/Translate/Model/` | Languages, preferences, keychain, per-window translation state |
-| `native/build.sh` | `.app` + `.dmg` assembly |
+## Settings
 
-The Anthropic path posts to `/v1/messages` as `claude-sonnet-5` with
-`thinking: {"type": "adaptive"}`; the OpenAI path posts to `/v1/responses` as
-`gpt-5.6-luna` with `store: false`. The **Quality** setting is the same dial on
-both — `output_config.effort` and `reasoning.effort` — and `low`, `medium`,
-`high` and `xhigh` are valid values for each, so the setting means the same
-thing whichever provider is selected. It defaults to `medium`; raise it when a
-passage needs care, lower it when you want speed. (GPT-5.6 also accepts `none`,
-`minimal` and `max`, which the app does not expose because Claude has no
-equivalent.)
+- **General**
+  - **Translate with** — Claude Sonnet 5 or GPT-5.6 Luna.
+  - **Quality** — *Low*, *Medium*, *High* or *Very high*. Higher settings take
+    more care over the wording, but they're slower and cost more. *Medium* is
+    the default.
+  - Default **Register**, **Speaker** and **Addressee**.
+  - **Copy the translation when it finishes** — puts every finished
+    translation on the clipboard automatically.
+- **Shortcut** — change the key combination, or reset it to <kbd>⌘⇧T</kbd>.
+  Also shows whether Accessibility is granted.
+- **API Keys** — add, check or remove a key for each provider.
 
-Translations stream token by token over `URLSession.bytes`. On the Anthropic
-side the system prompt is cached, so repeated translations into the same
-language with the same register only pay for the new text.
+## Menu bar
 
-The text you send is treated strictly as material to translate — the prompt
-tells the model to translate any questions or instructions it contains rather
-than acting on them.
+Translate lives in the menu bar. When you close the main window, its Dock icon
+goes away, but the shortcut keeps working. Use the menu-bar icon to reopen the
+window (**Open Translate**), translate a selection, open **Settings…**, or
+**Quit Translate**.
 
-### Threading
+## License
 
-Every AppKit call that orders or configures a window is on `@MainActor`:
-`OverlayController` is main-actor-isolated as a whole, and the hot-key callback
-hops to the main queue before it touches anything. Selection capture is the one
-piece that must not run there — it blocks for up to ~700 ms waiting for the
-frontmost app to service the copy — so it runs on its own dispatch queue and is
-awaited.
+[MIT](LICENSE)

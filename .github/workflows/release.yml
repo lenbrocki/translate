@@ -86,7 +86,7 @@ jobs:
           # which is 0 even when the result is "Invalid").
           SUBMIT_JSON="$(xcrun notarytool submit Translate.zip \
             --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" \
-            --wait --output-format json)"
+            --wait --timeout 30m --output-format json)"
           echo "$SUBMIT_JSON"
           SUBMISSION_ID="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
           STATUS="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["status"])')"
@@ -103,8 +103,12 @@ jobs:
 
           xcrun stapler staple "$APP"
 
-      - name: Build the DMG around the stapled app
-        run: ./build.sh --dmg-only
+      - name: Build & sign the DMG around the stapled app
+        run: |
+          set -euo pipefail
+          IDENTITY="$(security find-identity -v -p codesigning build.keychain \
+            | awk '/Developer ID Application/ {print $2; exit}')"
+          CODESIGN_IDENTITY="$IDENTITY" ./build.sh --dmg-only
 
       - name: Notarize the DMG
         env:
@@ -118,7 +122,7 @@ jobs:
           # Notarizing+stapling the .dmg itself lets the download pass Gatekeeper directly.
           SUBMIT_JSON="$(xcrun notarytool submit dist/Translate.dmg \
             --apple-id "$APPLE_ID" --team-id "$TEAM_ID" --password "$APPLE_APP_PASSWORD" \
-            --wait --output-format json)"
+            --wait --timeout 30m --output-format json)"
           echo "$SUBMIT_JSON"
           SUBMISSION_ID="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["id"])')"
           STATUS="$(echo "$SUBMIT_JSON" | python3 -c 'import sys,json; print(json.load(sys.stdin)["status"])')"

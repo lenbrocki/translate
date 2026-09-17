@@ -114,6 +114,14 @@ if [[ $BUILD_DMG == 1 ]]; then
     -ov -format UDZO \
     -quiet \
     "$DMG"
+
+  # A release signs the image too. Gatekeeper judges a downloaded .dmg by its
+  # own signature, which notarising and stapling don't supply.
+  if [[ -n "${CODESIGN_IDENTITY:-}" && "$CODESIGN_IDENTITY" != "-" ]]; then
+    echo "==> Signing the disk image ($CODESIGN_IDENTITY)"
+    codesign --force --sign "$CODESIGN_IDENTITY" --timestamp "$DMG"
+    codesign --verify --strict --verbose=2 "$DMG"
+  fi
 fi
 
 echo

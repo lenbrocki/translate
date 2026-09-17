@@ -1,7 +1,7 @@
 #!/bin/bash
 # Builds Translate.app and a distributable Translate.dmg into ./dist.
 #
-#   ./build.sh              universal (arm64 + x86_64), ad-hoc signed
+#   ./build.sh              universal (arm64 + x86_64)
 #   ./build.sh --native     this machine's architecture only, much faster
 #   ./build.sh --app-only   stop after the .app (the release notarises it first)
 #   ./build.sh --dmg-only   package the .app already in ./dist
@@ -10,6 +10,12 @@
 #
 #   CODESIGN_IDENTITY="Developer ID Application: …"   real signature + hardened runtime
 #   VERSION=1.2.0                                    stamped into the bundle
+#
+# Without CODESIGN_IDENTITY, a local build signs with the first "Apple
+# Development" certificate in the keychain, and ad hoc only if there is none
+# (or CODESIGN_IDENTITY=- asks for it). An ad-hoc signature changes on every
+# build, so macOS would treat each one as a new app and forget its
+# Accessibility grant; a certificate keeps it stable.
 #
 # That is deliberate: the .dmg the release workflow uploads is built by the
 # same code path as the one you build by hand, so a local check means something.
@@ -62,17 +68,28 @@ if [[ $BUILD_APP == 1 ]]; then
     plutil -replace CFBundleVersion -string "$VERSION" "$APP/Contents/Info.plist"
   fi
 
-  # Ad hoc unless a real identity is passed in. The hardened runtime and a secure
-  # timestamp are what notarisation requires, and neither is meaningful ad hoc.
-  if [[ -n "${CODESIGN_IDENTITY:-}" ]]; then
+  # An explicit identity is a release: the hardened runtime and a secure
+  # timestamp are what notarisation requires. The fallback development
+  # certificate needs neither, and a timestamp would need the network.
+  if [[ -n "${CODESIGN_IDENTITY:-}" && "$CODESIGN_IDENTITY" != "-" ]]; then
     echo "==> Signing ($CODESIGN_IDENTITY)"
     codesign --force --sign "$CODESIGN_IDENTITY" \
       --options runtime --timestamp \
       "$APP"
     codesign --verify --strict --verbose=2 "$APP"
   else
-    echo "==> Signing (ad hoc)"
-    codesign --force --sign - --timestamp=none "$APP"
+    DEV_IDENTITY=""
+    if [[ -z "${CODESIGN_IDENTITY:-}" ]]; then
+      DEV_IDENTITY="$(security find-identity -v -p codesigning \
+        | sed -n 's/^.*"\(Apple Development: .*\)"$/\1/p' | head -n 1)"
+    fi
+    if [[ -n "$DEV_IDENTITY" ]]; then
+      echo "==> Signing ($DEV_IDENTITY)"
+      codesign --force --sign "$DEV_IDENTITY" --timestamp=none "$APP"
+    else
+      echo "==> Signing (ad hoc — Accessibility must be re-granted after each build)"
+      codesign --force --sign - --timestamp=none "$APP"
+    fi
   fi
 fi
 

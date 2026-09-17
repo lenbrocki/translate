@@ -28,7 +28,9 @@ says when a choice is still in force.
 Select text anywhere, press <kbd>⌘⇧T</kbd>, and the translation appears in a
 card next to the pointer. The card is a non-activating panel that joins every
 Space, so the app underneath keeps focus and a full-screen app stays
-full-screen. <kbd>⎋</kbd> dismisses it, <kbd>⌘C</kbd> copies; clicking the
+full-screen. <kbd>⎋</kbd> dismisses it, <kbd>⌘C</kbd> copies, and
+<kbd>⌘↩</kbd> pastes the translation over the selection it came from; **Open in
+App** carries the text and its translation into the main window; clicking the
 target language re-translates the same captured text.
 
 ## What it does
@@ -39,8 +41,9 @@ target language re-translates the same captured text.
   ⌘↩ translates, ⌘. stops. The language pickers are searchable: click one and
   type any part of the English name, the endonym, or the code (`pt-` narrows to
   the two Portuguese variants, `简` finds Simplified Chinese).
-- **Auto-detect** — the source language defaults to *Detect language*; the
-  detected language comes back as a capsule next to the result.
+- **Auto-detect** — the source language defaults to *Detect language*; once
+  the translation comes back, the source picker names the language it found,
+  and swapping uses it as the new target.
 - **Formal / informal register** — the choice is enforced in the prompt with
   language-specific guidance, so Polish gets *Pan/Pani* vs *ty*, German *Sie* vs
   *du*, Japanese です/ます vs plain forms, and so on. The control is only live for
@@ -64,7 +67,9 @@ target language re-translates the same captured text.
   whatever app is frontmost, translates it, and shows the result in a floating
   card next to the pointer. The card is a non-activating `NSPanel` that joins
   every Space, so triggering it from a full-screen app does not switch you out
-  of it. ⎋ dismisses it, ⌘C copies the translation. Its header reads
+  of it. ⎋ dismisses it, ⌘C copies the translation, and ⌘↩ (or the replace
+  button) pastes it over the original selection — surrounding whitespace kept,
+  clipboard restored afterwards. Its header reads
   `source → target`; clicking the target opens the same searchable list and
   re-translates the captured text into whatever you pick.
 - **Two providers** — Claude Sonnet 5 (adaptive thinking) or GPT-5.6 Luna,
@@ -115,7 +120,7 @@ cd native && ./build.sh
 ```
 
 That compiles a universal (arm64 + x86_64) release binary, assembles
-`Translate.app`, signs it ad hoc, and writes `native/dist/Translate.dmg`.
+`Translate.app`, signs it, and writes `native/dist/Translate.dmg`.
 `./build.sh --native` skips the second architecture and is roughly twice as
 fast.
 
@@ -125,8 +130,14 @@ app bundle — so prefer `./build.sh --native && open dist/Translate.app`.
 
 ### A note on signing
 
-A local `./build.sh` signs ad hoc, so macOS quarantines the app on first
-launch: right-click it in `/Applications` and choose *Open*, or run
+A local `./build.sh` signs with the first *Apple Development* certificate in
+your keychain, which Xcode creates for any Apple ID. That signature stays the
+same from one build to the next, so the Accessibility grant and keychain access
+survive rebuilds.
+
+Without such a certificate (or with `CODESIGN_IDENTITY=-`) it signs ad hoc, and
+macOS quarantines the app on first launch: right-click it in `/Applications`
+and choose *Open*, or run
 `xattr -dr com.apple.quarantine "/Applications/Translate.app"`. Downloads from
 the Releases page are signed and notarized properly and need none of that.
 

@@ -13,7 +13,7 @@ enum SelectionError: LocalizedError {
         case .noSelection:
             "No text was selected."
         case .eventFailed:
-            "Could not send the copy keystroke."
+            "Could not send the keystroke."
         }
     }
 }
@@ -45,6 +45,16 @@ enum SelectionCapture {
         }
     }
 
+    /// Pastes `text` over the frontmost app's selection, leaving the clipboard
+    /// as it found it. The caller must hand focus back to that app first.
+    static func paste(_ text: String) async throws {
+        try await withCheckedThrowingContinuation { (continuation: CheckedContinuation<Void, Error>) in
+            queue.async {
+                continuation.resume(with: Result { try pasteSynchronously(text) })
+            }
+        }
+    }
+
     private static let queue = DispatchQueue(label: "com.lennartbrocki.translate.selection")
 
     private static func captureSynchronously() throws -> String {
@@ -57,7 +67,7 @@ enum SelectionCapture {
         // Give the user a moment to release the shortcut's modifier keys
         // before we push our own down; some apps get confused otherwise.
         Thread.sleep(forTimeInterval: 0.06)
-        try sendCopyKeystroke()
+        try sendCommandKeystroke(keyC)
 
         // Wait for the frontmost app to actually service the copy.
         var captured: String?
@@ -84,14 +94,37 @@ enum SelectionCapture {
         return text
     }
 
-    private static func sendCopyKeystroke() throws {
-        /// Virtual keycode for "C" on a US layout. Keycodes are positional, so
-        /// this is the physical key regardless of the user's layout.
-        let keyC: CGKeyCode = 8
+    private static func pasteSynchronously(_ text: String) throws {
+        guard hasAccessibilityPermission else { throw SelectionError.notTrusted }
 
+        let pasteboard = NSPasteboard.general
+        let saved = pasteboard.string(forType: .string)
+        pasteboard.clearContents()
+        pasteboard.setString(text, forType: .string)
+        let ours = pasteboard.changeCount
+
+        try sendCommandKeystroke(keyV)
+
+        // Pasting reads the pasteboard asynchronously and there is no signal
+        // for when it has, so wait longer than the copy does before restoring.
+        // If something else wrote to the pasteboard meanwhile, leave it be.
+        Thread.sleep(forTimeInterval: 0.3)
+        if let saved, pasteboard.changeCount == ours {
+            pasteboard.clearContents()
+            pasteboard.setString(saved, forType: .string)
+        }
+    }
+
+    /// Virtual keycodes for "C" and "V" on a US layout. Keycodes are
+    /// positional, so these are the physical keys regardless of the user's
+    /// layout.
+    private static let keyC: CGKeyCode = 8
+    private static let keyV: CGKeyCode = 9
+
+    private static func sendCommandKeystroke(_ key: CGKeyCode) throws {
         guard let source = CGEventSource(stateID: .combinedSessionState),
-              let down = CGEvent(keyboardEventSource: source, virtualKey: keyC, keyDown: true),
-              let up = CGEvent(keyboardEventSource: source, virtualKey: keyC, keyDown: false)
+              let down = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: true),
+              let up = CGEvent(keyboardEventSource: source, virtualKey: key, keyDown: false)
         else { throw SelectionError.eventFailed }
 
         // Set the flags explicitly so modifiers the user is still physically
@@ -100,5 +133,47 @@ enum SelectionCapture {
         up.flags = .maskCommand
         down.post(tap: .cghidEventTap)
         up.post(tap: .cghidEventTap)
+    }
+}
+
+/// The selection a translation can be pasted back over. The request translates
+/// the text trimmed, so the whitespace around it is kept here and put back —
+/// otherwise replacing a triple-clicked line would swallow its newline.
+struct ReplacementTarget {
+    let app: NSRunningApplication
+    let leading: String
+    let trailing: String
+
+    init(app: NSRunningApplication, selection: String) {
+        self.app = app
+        leading = String(selection.prefix { $0.isWhitespace })
+        trailing = selection.allSatisfy(\.isWhitespace)
+            ? ""
+            : String(String(selection.reversed().prefix { $0.isWhitespace }).reversed())
+    }
+
+    /// Brings the app back to the front and pastes `translation` over its
+    /// selection. Whatever window of ours had focus must already be gone or
+    /// be giving it up, or the ⌘V lands there instead.
+    @MainActor
+    func paste(_ translation: String) async {
+        app.activate()
+
+        // Wait for focus to actually land back in the app, instead of
+        // guessing how long that takes.
+        for _ in 0..<25 {
+            try? await Task.sleep(for: .milliseconds(20))
+            if NSApp.keyWindow == nil,
+               NSWorkspace.shared.frontmostApplication?.processIdentifier == app.processIdentifier {
+                break
+            }
+        }
+        try? await Task.sleep(for: .milliseconds(40))
+
+        do {
+            try await SelectionCapture.paste(leading + translation + trailing)
+        } catch {
+            NSLog("Translate: could not replace the selection — \(error.localizedDescription)")
+        }
     }
 }

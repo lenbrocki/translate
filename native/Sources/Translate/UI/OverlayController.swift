@@ -26,17 +26,24 @@ final class OverlayController {
     /// True while the language list is showing. It is a child window, so the
     /// panel resigns key and would otherwise dismiss itself out from under it.
     private var isPickerOpen = false
+    /// Where the selection came from, so the translation can be pasted back
+    /// over it.
+    private var replacementTarget: ReplacementTarget?
+    /// A replace pressed before the translation finished, waiting for it to.
+    private var pendingReplace: Task<Void, Never>?
 
     private let gap: CGFloat = 16
     private let screenEdge: CGFloat = 12
 
     var isVisible: Bool { panel?.isVisible ?? false }
 
-    /// Shows the card near `anchor` (defaults to the pointer).
-    func present(near anchor: NSPoint? = nil) {
+    /// Shows the card near `anchor` (defaults to the pointer). `target` is the
+    /// selection the card is translating, if the translation can replace it.
+    func present(near anchor: NSPoint? = nil, replacing target: ReplacementTarget? = nil) {
         let panel = panel ?? makePanel()
         self.panel = panel
         self.anchor = anchor ?? NSEvent.mouseLocation
+        replacementTarget = target
 
         place()
         shownAt = Date()
@@ -49,7 +56,51 @@ final class OverlayController {
         stopKeyMonitor()
         panel?.orderOut(nil)
         shownAt = nil
+        pendingReplace?.cancel()
+        pendingReplace = nil
         session.cancel()
+    }
+
+    /// Moves the translation into the main window, where there is room to
+    /// edit the source text or keep working with it.
+    func openInMainWindow() {
+        // Before dismissing: that cancels a translation still streaming.
+        guard let snapshot = session.snapshot else { return }
+        let target = replacementTarget
+        dismiss()
+        AppCore.shared.openInMainWindow(snapshot, replacing: target)
+    }
+
+    /// Pastes the translation over the selection it came from.
+    ///
+    /// Pressed while the translation is still streaming, it waits for the end
+    /// rather than doing nothing: the text often looks finished a moment
+    /// before the stream actually closes, and a click that silently misses
+    /// reads as a broken button.
+    func replaceSelection() {
+        guard replacementTarget != nil, !session.trimmedOutput.isEmpty, pendingReplace == nil else { return }
+        pendingReplace = Task { [weak self] in
+            while self?.session.isStreaming == true {
+                try? await Task.sleep(for: .milliseconds(50))
+                if Task.isCancelled { return }
+            }
+            guard let self, !Task.isCancelled else { return }
+            self.pendingReplace = nil
+            guard self.session.errorMessage == nil else { return }
+            await self.pasteTranslation()
+        }
+    }
+
+    /// The panel has to go first: while it is key, the ⌘V would land in the
+    /// card rather than in the app underneath.
+    private func pasteTranslation() async {
+        guard let target = replacementTarget else { return }
+        let translation = session.trimmedOutput
+        guard !translation.isEmpty else { return }
+
+        dismiss()
+        replacementTarget = nil
+        await target.paste(translation)
     }
 
     // MARK: - Panel
@@ -67,6 +118,10 @@ final class OverlayController {
         panel.isOpaque = false
         panel.backgroundColor = .clear
         panel.hasShadow = true
+        // The app stays inactive while the card is up, and an inactive app's
+        // window gets no mouse-moved events unless it asks — without them
+        // SwiftUI's hover never fires on the card's buttons.
+        panel.acceptsMouseMovedEvents = true
         panel.isMovableByWindowBackground = true
         panel.animationBehavior = .utilityWindow
         // Above normal and floating windows, and above another app's
@@ -80,6 +135,8 @@ final class OverlayController {
             rootView: OverlayView(
                 session: session,
                 onClose: { [weak self] in self?.dismiss() },
+                onReplace: { [weak self] in self?.replaceSelection() },
+                onOpenInApp: { [weak self] in self?.openInMainWindow() },
                 onPickerOpenChange: { [weak self] open in self?.setPickerOpen(open) }
             )
         )
@@ -175,6 +232,11 @@ final class OverlayController {
             if event.modifierFlags.contains(.command),
                event.charactersIgnoringModifiers?.lowercased() == "c" {
                 Clipboard.write(self.session.trimmedOutput)
+                return nil
+            }
+            if event.keyCode == 36, // Return
+               event.modifierFlags.contains(.command), !self.isPickerOpen {
+                self.replaceSelection()
                 return nil
             }
             return event

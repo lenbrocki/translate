@@ -103,6 +103,22 @@ enum Languages {
     }
 
     /// Label for the toolbar pickers.
+    /// The code for a language the model named, or nil when the name fits
+    /// none or several. The model answers in free-form English, so words are
+    /// compared regardless of order and punctuation — "Chinese (Simplified)"
+    /// is Simplified Chinese — while a bare "Portuguese" stays ambiguous
+    /// rather than being guessed into one variant.
+    static func code(forDetectedName detected: String) -> String? {
+        func words(_ text: String) -> Set<String> {
+            Set(text.lowercased().split { !$0.isLetter }.map(String.init))
+        }
+        let wanted = words(detected)
+        let matches = all.filter {
+            words($0.name) == wanted || $0.native.lowercased() == detected.lowercased()
+        }
+        return matches.count == 1 ? matches[0].code : nil
+    }
+
     static func label(for code: String) -> String {
         code == autoDetect ? "Detect language" : name(for: code)
     }

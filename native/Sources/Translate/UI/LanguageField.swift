@@ -15,6 +15,9 @@ struct LanguageField: View {
     @Binding var selection: String
     /// Offers "Detect language" at the top, for the source side.
     var includesAutoDetect = false
+    /// The language detection settled on, shown in place of "Detect language"
+    /// while that is the selection.
+    var detectedLanguage: String?
     var width: CGFloat = 180
     var style: Style = .bordered
     /// Lets a host suppress its own dismissal while the list is open.
@@ -56,9 +59,22 @@ struct LanguageField: View {
         case .bordered:
             Button { present() } label: {
                 HStack(spacing: 6) {
-                    Text(Languages.label(for: selection))
-                        .lineLimit(1)
-                        .truncationMode(.tail)
+                    if selection == Languages.autoDetect, let detectedLanguage {
+                        // The name gives way before the note does: a
+                        // truncated "Portuguese (Bra…" still reads, a bare
+                        // name would pass for a language picked by hand.
+                        Text(detectedLanguage)
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                        Text("detected")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.secondary)
+                            .fixedSize()
+                    } else {
+                        Text(Languages.label(for: selection))
+                            .lineLimit(1)
+                            .truncationMode(.tail)
+                    }
                     Spacer(minLength: 4)
                     Image(systemName: "chevron.up.chevron.down")
                         .font(.system(size: 9, weight: .semibold))
@@ -68,6 +84,7 @@ struct LanguageField: View {
                 .contentShape(Rectangle())
             }
             .buttonStyle(.bordered)
+            .hoverHighlight()
 
         case .inline:
             // Plain, not `.accessoryBar`: that style adds insets of its own, so
@@ -136,6 +153,7 @@ struct LanguageField: View {
             .frame(height: 260)
         }
         .frame(width: 270)
+        .background(MouseMovedEvents())
     }
 
     private var results: [Language] {
@@ -180,6 +198,24 @@ struct LanguageField: View {
     private func choose(_ code: String) {
         selection = code
         isPresented = false
+    }
+}
+
+/// Turns on mouse-moved events for the window it lands in.
+///
+/// The list is a popover, and a popover is a window of its own. Opened from the
+/// overlay, the app is inactive, and an inactive app's window only gets
+/// mouse-moved events when it asks — without them the row hover lags behind
+/// the pointer. The overlay panel asks for itself; this does it for the popover.
+private struct MouseMovedEvents: NSViewRepresentable {
+    func makeNSView(context: Context) -> NSView { WindowHook() }
+    func updateNSView(_ view: NSView, context: Context) {}
+
+    private final class WindowHook: NSView {
+        override func viewDidMoveToWindow() {
+            super.viewDidMoveToWindow()
+            window?.acceptsMouseMovedEvents = true
+        }
     }
 }
 

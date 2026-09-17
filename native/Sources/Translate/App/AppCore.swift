@@ -5,6 +5,11 @@ enum WindowID {
     static let main = "main"
 }
 
+extension Notification.Name {
+    /// The overlay left a translation for the main window to pick up.
+    static let translationHandoff = Notification.Name("com.lennartbrocki.translate.handoff")
+}
+
 /// The parts of the app that outlive any window: the global shortcut, the
 /// overlay, and the selection-translation flow that connects them.
 @MainActor
@@ -15,6 +20,14 @@ final class AppCore {
 
     private let hotKey = GlobalHotKey()
     private var openMainWindow: (() -> Void)?
+    private var pendingHandoff: Handoff?
+
+    /// A translation on its way from the overlay to the main window, with the
+    /// selection it came from when it can still be replaced.
+    struct Handoff {
+        let snapshot: TranslationSession.Snapshot
+        let target: ReplacementTarget?
+    }
 
     private init() {}
 
@@ -47,13 +60,17 @@ final class AppCore {
     /// off the main actor.
     func translateSelection() {
         let anchor = NSEvent.mouseLocation
+        let sourceApp = NSWorkspace.shared.frontmostApplication
 
         Task {
             do {
                 let text = try await SelectionCapture.capture()
                 let preferences = Preferences.shared
                 overlay.session.reset()
-                overlay.present(near: anchor)
+                overlay.present(
+                    near: anchor,
+                    replacing: sourceApp.map { ReplacementTarget(app: $0, selection: text) }
+                )
                 overlay.session.start(
                     TranslationRequest(
                         text: text.trimmingCharacters(in: .whitespacesAndNewlines),
@@ -77,6 +94,20 @@ final class AppCore {
     }
 
     // MARK: - Main window
+
+    /// Shows `snapshot` in the main window. The window may not exist yet, so
+    /// the translation waits here: a new window takes it when it appears, an
+    /// open one when the notification arrives.
+    func openInMainWindow(_ snapshot: TranslationSession.Snapshot, replacing target: ReplacementTarget?) {
+        pendingHandoff = Handoff(snapshot: snapshot, target: target)
+        NotificationCenter.default.post(name: .translationHandoff, object: nil)
+        showMainWindow()
+    }
+
+    func takeHandoff() -> Handoff? {
+        defer { pendingHandoff = nil }
+        return pendingHandoff
+    }
 
     func registerWindowOpener(_ open: @escaping () -> Void) {
         openMainWindow = open

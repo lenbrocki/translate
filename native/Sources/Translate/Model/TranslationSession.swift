@@ -77,6 +77,42 @@ final class TranslationSession {
         errorMessage = nil
         request = nil
     }
+
+    /// Everything needed to show this translation somewhere else.
+    struct Snapshot {
+        let request: TranslationRequest
+        let output: String
+        let detectedLanguage: String?
+        let errorMessage: String?
+        let isComplete: Bool
+    }
+
+    var snapshot: Snapshot? {
+        request.map {
+            Snapshot(
+                request: $0,
+                output: trimmedOutput,
+                detectedLanguage: detectedLanguage,
+                errorMessage: errorMessage,
+                isComplete: !isStreaming
+            )
+        }
+    }
+
+    /// Takes over a translation from another session. A finished one is shown
+    /// as it is, without asking the model again; one still streaming is
+    /// started over, since its stream belongs to the session it came from.
+    func restore(_ snapshot: Snapshot) {
+        guard snapshot.isComplete else {
+            start(snapshot.request)
+            return
+        }
+        cancel()
+        request = snapshot.request
+        output = snapshot.output
+        detectedLanguage = snapshot.detectedLanguage
+        errorMessage = snapshot.errorMessage
+    }
 }
 
 enum Clipboard {

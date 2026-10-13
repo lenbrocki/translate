@@ -1,6 +1,6 @@
 # Translate
 
-A macOS app that translates text with **Claude Sonnet 5** or **GPT-5.6 Luna** —
+A macOS app that translates text with **Claude Sonnet 5.5** or **GPT-5.6 Luna** —
 in its own window, or right inside whatever app you're using, with a keyboard
 shortcut that shows the translation in a floating card next to your pointer.
 
@@ -110,7 +110,7 @@ you had copied will be lost.
 ## Settings
 
 - **General**
-  - **Translate with** — Claude Sonnet 5 or GPT-5.6 Luna.
+  - **Translate with** — Claude Sonnet 5.5 or GPT-5.6 Luna.
   - **Quality** — *Low*, *Medium*, *High* or *Very high*. Higher settings take
     more care over the wording, but they're slower and cost more. *Medium* is
     the default.

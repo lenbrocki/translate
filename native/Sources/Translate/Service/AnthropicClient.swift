@@ -2,7 +2,7 @@ import Foundation
 
 /// Streams a translation from the Anthropic Messages API.
 ///
-/// Claude Sonnet 5 with adaptive thinking; `effort` controls how much
+/// Claude Sonnet 5.5 with adaptive thinking; `effort` controls how much
 /// deliberation it spends on the wording.
 enum AnthropicClient {
     private static let endpoint = URL(string: "https://api.anthropic.com/v1/messages")!

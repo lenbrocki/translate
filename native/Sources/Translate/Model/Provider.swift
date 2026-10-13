@@ -29,14 +29,14 @@ enum Provider: String, CaseIterable, Identifiable, Sendable {
 
     var model: String {
         switch self {
-        case .anthropic: "claude-sonnet-5"
+        case .anthropic: "claude-sonnet-5-5"
         case .openai: "gpt-5.6-luna"
         }
     }
 
     var modelLabel: String {
         switch self {
-        case .anthropic: "Claude Sonnet 5"
+        case .anthropic: "Claude Sonnet 5.5"
         case .openai: "GPT-5.6 Luna"
         }
     }
